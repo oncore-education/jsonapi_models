@@ -13,10 +13,10 @@ TODO:
 
 ## Installation
 
-Add this line to your application's Gemfile:
+Add this line to your application's Gemfile: (I haven't pushed to rubygems yet)
 
 ```ruby
-gem 'jsonapi_models'
+gem 'jsonapi_models', :git => 'https://github.com/oncore-education/jsonapi_models.git'
 ```
 
 And then execute:
