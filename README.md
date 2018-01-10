@@ -35,11 +35,13 @@ If a model exists, but does not have a serializer it will be skipped
 ## Extra Attributes  
 In some cases you may want to allow attributes to be pushed to the API, but not serialized from the API. For instance
 you need to push `user.password`, but you shouldn't have `password` in the user serializer.  To include these
-private attributes simply add a line like this to your serializer class:
+private attributes simply add a method in your seralizer called `private_attributes`
 
 ```ruby
-#push_attr password:string
-#push_attr password_confirmation:string
+def private_attributes
+  ["password:string",
+   "password_confirmation:string"]
+end
 ```
 
 ## Usage
