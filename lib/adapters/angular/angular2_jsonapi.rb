@@ -19,31 +19,53 @@ module JsonapiModels
           model_relationships = []
           model_attributes = []
           File.open(serializer_file, "r") do |f|
-            f.each_line do |line|
-              if not_comment?(line)
-                relation = nil
-                if line.include?("has_many")
-                  relation = "@HasMany"
-                elsif line.include?("belongs_to")
-                  relation = "@BelongsTo"
-                end
-
-                if relation.present?
-                  line = line.split("#").first.strip
-                  relationship = line.split(":").last.squish
-                  model_relationships << "  #{relation}(#{serialized_name(relationship)})\n" +
-                      "  #{relationship.camelize(:lower)}: #{relationship.singularize.classify};"
-                  model_imports << "import { #{relationship.singularize.classify} } from 'models/#{relationship.singularize}.model';"
-                end
-              end
-
-              if line.include?("#push_attr")
-                push_attributes << line.split(" ").last.squish
-              end
-            end
+            # f.each_line do |line|
+            #   if not_comment?(line)
+            #     relation = nil
+            #     if line.include?("has_many")
+            #       relation = "@HasMany"
+            #     elsif line.include?("belongs_to")
+            #       relation = "@BelongsTo"
+            #     end
+            #
+            #     if relation.present?
+            #       line = line.split("#").first.strip
+            #       relationship = line.split(":").last.squish
+            #       model_relationships << "  #{relation}(#{serialized_name(relationship)})\n" +
+            #           "  #{relationship.camelize(:lower)}: _#{relationship.singularize.classify};"
+            #       model_imports << "import { _#{relationship.singularize.classify} } from 'models/machine/_#{relationship.singularize}.model';"
+            #     end
+            #   end
+            #
+            #   if line.include?("#push_attr")
+            #     push_attributes << line.split(" ").last.squish
+            #   end
+            # end
 
             sample_model =  model.classify.constantize.new
-            serializer = "#{model}_serializer".classify.constantize.new(sample_model)
+            serializer_type = "#{model}_serializer".classify.constantize
+            serializer = serializer_type.new(sample_model)
+            associations = serializer.associations.map{ |assoc| assoc.name.to_s }
+            associations += serializer.forced_relationships if serializer_type.method_defined? :forced_relationships
+            associations.each do |assoc|
+              relationship = assoc
+              relation = is_singular?(relationship) ? "@BelongsTo" : "@HasMany"
+              model_relationships << "  #{relation}(#{serialized_name(relationship)})\n" +
+                        "  #{relationship.camelize(:lower)}: _#{relationship.singularize.classify};"
+              model_imports << "import { _#{relationship.singularize.classify} } from 'models/machine/_#{relationship.singularize}.model';"
+            end
+
+
+            if serializer_type.method_defined? :private_attributes
+              serializer.private_attributes.each do |attr|
+                push_attributes << attr
+              end
+
+            end
+
+            # model.classify.constantize.reflect_on_all_associations.each do |assoc|
+            #   puts "#{assoc.macro} #{assoc.name}"
+            # end
 
             types = model.classify.constantize.columns.map { |col| [col.name.to_sym, ng_type(col.type)] }.to_h
             serializer.attributes.each do |key, value|
@@ -86,7 +108,6 @@ module JsonapiModels
 
         File.write("#{output}/models/index.ts", exports.join("\n"))
 
-
         erb_template("datastore.ts.erb",
                      "#{output}/services/datastore.ts",
                      { :models => data_store_models.join(",\n"),
@@ -96,6 +117,9 @@ module JsonapiModels
 
       end
 
+      def is_singular?(str)
+        str.singularize == str
+      end
 
       def serialized_name(key)
         key.include?("_") ? "{ serializedName: '#{underscore(key)}' }" : ""
