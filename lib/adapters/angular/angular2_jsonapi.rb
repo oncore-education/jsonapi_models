@@ -18,92 +18,61 @@ module JsonapiModels
           model_imports = []
           model_relationships = []
           model_attributes = []
-          File.open(serializer_file, "r") do |f|
-            # f.each_line do |line|
-            #   if not_comment?(line)
-            #     relation = nil
-            #     if line.include?("has_many")
-            #       relation = "@HasMany"
-            #     elsif line.include?("belongs_to")
-            #       relation = "@BelongsTo"
-            #     end
-            #
-            #     if relation.present?
-            #       line = line.split("#").first.strip
-            #       relationship = line.split(":").last.squish
-            #       model_relationships << "  #{relation}(#{serialized_name(relationship)})\n" +
-            #           "  #{relationship.camelize(:lower)}: _#{relationship.singularize.classify};"
-            #       model_imports << "import { _#{relationship.singularize.classify} } from 'models/machine/_#{relationship.singularize}.model';"
-            #     end
-            #   end
-            #
-            #   if line.include?("#push_attr")
-            #     push_attributes << line.split(" ").last.squish
-            #   end
-            # end
 
-            sample_model =  model.classify.constantize.new
-            serializer_type = "#{model}_serializer".classify.constantize
-            serializer = serializer_type.new(sample_model)
-            associations = serializer.associations.map{ |assoc| assoc.name.to_s }
-            associations += serializer.forced_relationships if serializer_type.method_defined? :forced_relationships
-            associations.each do |assoc|
-              relationship = assoc
-              relation = is_singular?(relationship) ? "@BelongsTo" : "@HasMany"
-              model_relationships << "  #{relation}(#{serialized_name(relationship)})\n" +
-                        "  #{relationship.camelize(:lower)}: _#{relationship.singularize.classify};"
-              model_imports << "import { _#{relationship.singularize.classify} } from 'models/machine/_#{relationship.singularize}.model';"
+          sample_model =  model.classify.constantize.new
+          serializer_type = "#{model}_serializer".classify.constantize
+          serializer = serializer_type.new(sample_model)
+          associations = serializer.associations.map{ |assoc| assoc.name.to_s }
+          associations += serializer.forced_relationships if serializer_type.method_defined? :forced_relationships
+          associations.each do |assoc|
+            relationship = assoc
+            relation = is_singular?(relationship) ? "@BelongsTo" : "@HasMany"
+            model_relationships << "  #{relation}(#{serialized_name(relationship)})\n" +
+                "  #{relationship.camelize(:lower)}: _#{relationship.singularize.classify};"
+            model_imports << "import { _#{relationship.singularize.classify} } from 'models/machine/_#{relationship.singularize}.model';"
+          end
+
+          if serializer_type.method_defined? :private_attributes
+            serializer.private_attributes.each do |attr|
+              push_attributes << attr
             end
+          end
 
+          types = model.classify.constantize.columns.map { |col| [col.name.to_sym, ng_type(col.type)] }.to_h
+          serializer.attributes.each do |key, value|
+            key = key.to_s
+            next if key == "id"
+            model_attributes << "  @Attribute(#{serialized_name(key)})\n" +
+                "  #{key.camelize(:lower)}: #{types[key.to_sym]};"
+          end
 
-            if serializer_type.method_defined? :private_attributes
-              serializer.private_attributes.each do |attr|
-                push_attributes << attr
-              end
-
-            end
-
-            # model.classify.constantize.reflect_on_all_associations.each do |assoc|
-            #   puts "#{assoc.macro} #{assoc.name}"
-            # end
-
-            types = model.classify.constantize.columns.map { |col| [col.name.to_sym, ng_type(col.type)] }.to_h
-            serializer.attributes.each do |key, value|
-              key = key.to_s
-              next if key == "id"
+          if !push_attributes.empty?
+            model_attributes << "  //Private Push Only Attributes"
+            push_attributes.each do |attr|
+              a = attr.split(":")
+              key = a[0]
+              type = a[1]
               model_attributes << "  @Attribute(#{serialized_name(key)})\n" +
-                  "  #{key.camelize(:lower)}: #{types[key.to_sym]};"
+                  "  #{key.camelize(:lower)}: #{type};"
             end
+          end
 
-            if !push_attributes.empty?
-              model_attributes << "  //Private Push Only Attributes"
-              push_attributes.each do |attr|
-                a = attr.split(":")
-                key = a[0]
-                type = a[1]
-                model_attributes << "  @Attribute(#{serialized_name(key)})\n" +
-                    "  #{key.camelize(:lower)}: #{type};"
-              end
-            end
-
-            model_destination = "#{output}/models/#{model}.model.ts"
-            unless File.exist?(model_destination)
-              erb_template("model.ts.erb",
-                           model_destination,
-                           { :model => model,
-                             :classname => model.classify })
-            end
-
-            erb_template("machine_model.ts.erb",
-                         "#{output}/models/machine/_#{model}.model.ts",
-                         { :type => model.pluralize,
-                           :file => "models/#{model}.model.ts",
-                           :attributes => model_attributes.join("\n\n"),
-                           :relationships => model_relationships.join("\n\n"),
-                           :imports => model_imports.join("\n"),
+          model_destination = "#{output}/models/#{model}.model.ts"
+          unless File.exist?(model_destination)
+            erb_template("model.ts.erb",
+                         model_destination,
+                         { :model => model,
                            :classname => model.classify })
           end
 
+          erb_template("machine_model.ts.erb",
+                       "#{output}/models/machine/_#{model}.model.ts",
+                       { :type => model.pluralize,
+                         :file => "models/#{model}.model.ts",
+                         :attributes => model_attributes.join("\n\n"),
+                         :relationships => model_relationships.join("\n\n"),
+                         :imports => model_imports.join("\n"),
+                         :classname => model.classify })
         end
 
         File.write("#{output}/models/index.ts", exports.join("\n"))
