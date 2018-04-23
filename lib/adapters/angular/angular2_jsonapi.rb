@@ -22,14 +22,26 @@ module JsonapiModels
           sample_model =  model.classify.constantize.new
           serializer_type = "#{model}_serializer".classify.constantize
           serializer = serializer_type.new(sample_model)
+
           associations = serializer.associations.map{ |assoc| assoc.name.to_s }
           associations += serializer.forced_relationships if serializer_type.method_defined? :forced_relationships
           associations.each do |assoc|
             relationship = assoc
+            relataionship_types = "_#{relationship.singularize.classify}"
+            if serializer_type.method_defined? "#{assoc}_types".to_sym
+              types = serializer.send("#{assoc}_types").map { |type| type.to_s }
+              relataionship_types =  types.map { |type| "_#{type}" }.join(" | ")
+              types.each do |t|
+                model_imports << "import { _#{t.singularize.classify} } from 'models/machine/_#{t.singularize}.model';"
+              end
+            else
+              model_imports << "import { _#{relationship.singularize.classify} } from 'models/machine/_#{relationship.singularize}.model';"
+            end
+
             relation = is_singular?(relationship) ? "@BelongsTo" : "@HasMany"
             model_relationships << "  #{relation}(#{serialized_name(relationship)})\n" +
-                "  #{relationship.camelize(:lower)}: _#{relationship.singularize.classify};"
-            model_imports << "import { _#{relationship.singularize.classify} } from 'models/machine/_#{relationship.singularize}.model';"
+                "  #{relationship.camelize(:lower)}: #{relataionship_types};"
+
           end
 
           if serializer_type.method_defined? :private_attributes
