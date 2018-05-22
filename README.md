@@ -44,6 +44,19 @@ def private_attributes
 end
 ```
 
+## Polymorphic Attributes  
+If you are using polymorphic relationships your serializer will have a line like:
+```ruby
+belongs_to :commentable, :polymorphic => true
+```
+
+You can define a method in the serlializer to define what the available types will be.
+```ruby
+def commentable_types
+  [Article, Event, Photo]
+end
+```
+
 ## Usage
 
 install initializers
