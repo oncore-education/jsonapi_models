@@ -13,38 +13,41 @@ module JsonapiModels
 
           exports << "export * from 'models/#{model}.model';"
           machine_exports << "export * from 'models/machine/_#{model}.model';"
-          data_store_models << "    '#{underscore(model.pluralize)}': #{model.classify}"
+          data_store_models << "    '#{model.pluralize}': #{model.classify}"
           data_store_imports << model.classify
 
           push_attributes = []
-          model_imports = []
+          model_imports = {}
           model_relationships = []
           model_attributes = []
 
           sample_model =  model.classify.constantize.new
           serializer_type = "#{model}_serializer".classify.constantize
           serializer = serializer_type.new(sample_model)
-
-          associations = serializer.associations.map{ |assoc| assoc.name.to_s }
+          associations = sample_model.serialized_relationships.map{ |assoc| assoc.to_s } # serializer.associations.map{ |assoc| assoc.name.to_s }
           associations += serializer.forced_relationships if serializer_type.method_defined? :forced_relationships
           associations.each do |assoc|
             relationship = assoc
             type_suffix = is_singular?(relationship) ? "" : "[]"
-            relataionship_types = "_#{relationship.singularize.classify}#{type_suffix}"
+            relataionship_types = "_#{relationship.singularize.classify}" #{type_suffix}
+
+            relection_options = sample_model.relationship_reflection(relationship).options
+            relataionship_types = "_#{relection_options[:class_name].singularize.classify}" if relection_options[:class_name].present? #{type_suffix}
+
             if serializer_type.method_defined? "#{assoc}_types".to_sym
               types = serializer.send("#{assoc}_types").map { |type| type.to_s }
               relataionship_types = types.map { |type| "_#{type}#{type_suffix}" }.join(" | ")
               types.each do |t|
-                model_imports << "import { _#{t.singularize.classify} } from 'models/machine/_#{t.singularize.downcase}.model';"
+                model_imports[t.singularize.classify] = "import { _#{t.singularize.classify} } from 'models/machine/_#{t.singularize.downcase}.model';"
               end
             else
-              model_imports << "import { _#{relationship.singularize.classify} } from 'models/machine/_#{relationship.singularize}.model';"
+              model_imports[relataionship_types.singularize.classify] = "import { _#{relataionship_types.singularize.classify} } from 'models/machine/#{relataionship_types.singularize.downcase}.model';"
             end
 
             relation = is_singular?(relationship) ? "@BelongsTo" : "@HasMany"
 
             model_relationships << "  #{relation}(#{serialized_name(relationship, "key")})\n" +
-                "  #{relationship.camelize(:lower)}: #{relataionship_types};"
+                "  #{relationship.camelize(:lower)}: #{relataionship_types}#{type_suffix};"
 
           end
 
@@ -87,7 +90,7 @@ module JsonapiModels
                          :file => "models/#{model}.model.ts",
                          :attributes => model_attributes.join("\n\n"),
                          :relationships => model_relationships.join("\n\n"),
-                         :imports => model_imports.join("\n"),
+                         :imports => model_imports.select { |key, value| key.to_s != model.classify.to_s }.map { |key, value| value }.join("\n"),
                          :classname => model.classify })
         end
 
@@ -108,7 +111,7 @@ module JsonapiModels
       end
 
       def serialized_name(key, property = "serializedName")
-        key.include?("_") ? "{ #{property}: '#{underscore(key)}' }" : ""
+        key.include?("_") ? "{ #{property}: '#{key}' }" : "" # underscore(key)
       end
 
     end
