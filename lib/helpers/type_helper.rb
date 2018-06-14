@@ -6,7 +6,7 @@ module JsonapiModels
         return "Date"
       elsif type.to_s == "integer" || type.to_s == "float"
         return "number"
-      elsif type.to_s == "text"
+      elsif type.to_s == "text" || type.to_s == "jsonb"
         return "string"
       end
 
