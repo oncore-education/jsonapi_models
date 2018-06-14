@@ -29,25 +29,29 @@ module JsonapiModels
           associations.each do |assoc|
             relationship = assoc
             type_suffix = is_singular?(relationship) ? "" : "[]"
-            relataionship_types = "_#{relationship.singularize.classify}" #{type_suffix}
+            relataionship_types = "#{relationship.singularize.classify}" #{type_suffix}
 
             relection_options = sample_model.relationship_reflection(relationship).options
-            relataionship_types = "_#{relection_options[:class_name].singularize.classify}" if relection_options[:class_name].present? #{type_suffix}
+            relataionship_types = "#{relection_options[:class_name].singularize.classify}" if relection_options[:class_name].present? #{type_suffix}
 
             if serializer_type.method_defined? "#{assoc}_types".to_sym
               types = serializer.send("#{assoc}_types").map { |type| type.to_s }
               relataionship_types = types.map { |type| "_#{type}#{type_suffix}" }.join(" | ")
               types.each do |t|
-                model_imports[t.singularize.classify] = "import { _#{t.singularize.classify} } from 'models/machine/_#{t.singularize.downcase}.model';"
+                tc = t.singularize.classify
+                model_imports[tc] = "import { _#{tc} } from 'models/machine/_#{tc.underscore.downcase}.model';"
               end
             else
-              model_imports[relataionship_types.singularize.classify] = "import { _#{relataionship_types.singularize.classify} } from 'models/machine/#{relataionship_types.singularize.downcase}.model';"
+              model_imports[relataionship_types] = "import { _#{relataionship_types} } from 'models/machine/_#{relataionship_types.underscore.downcase}.model';"
+              relataionship_types = "_#{relataionship_types}#{type_suffix}"
             end
+
+            # puts relataionship_types.underscore # .downcase
 
             relation = is_singular?(relationship) ? "@BelongsTo" : "@HasMany"
 
             model_relationships << "  #{relation}(#{serialized_name(relationship, "key")})\n" +
-                "  #{relationship.camelize(:lower)}: #{relataionship_types}#{type_suffix};"
+                "  #{relationship.camelize(:lower)}: #{relataionship_types};"
 
           end
 
